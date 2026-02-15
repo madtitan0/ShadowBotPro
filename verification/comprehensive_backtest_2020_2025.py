@@ -76,49 +76,49 @@ class Backtester:
             return False
 
     def run_simulation(self):
-        """Redesigned 10-Year Hyper-Aggressive Compounding Simulation"""
+        """Ultra-Precision 10-Year Compounding Simulation"""
         if not self.fetch_data(): return
         
         position = 0
         entry_price = 0
         sl_dist = 0
         tp_dist = 0
-        entry_time = None
+        hwm = Config.INITIAL_BALANCE
+        monthly_hwm = Config.INITIAL_BALANCE
         
-        print(f"Starting decade-long simulation with strict 2% DD constraint...")
+        print(f"Executing Master's Performance Script: 20% Monthly Goal...")
         
         for i in range(50, len(self.data)):
             timestamp = self.data.index[i]
+            # Reset monthly HWM for local DD management
+            if timestamp.day == 1: monthly_hwm = self.balance
+            
             o, h, l, c = self.data['Open'].iloc[i], self.data['High'].iloc[i], self.data['Low'].iloc[i], self.data['Close'].iloc[i]
             
-            # DD Check
-            if self.balance > self.hwm: self.hwm = self.balance
-            current_dd = (self.hwm - self.balance) / self.hwm * 100.0
+            if self.balance > hwm: hwm = self.balance
+            current_dd = (hwm - self.balance) / hwm * 100.0
             
-            # Safety Circuit Breaker
+            # Hard Safety: Global 2% DD Floor
             if current_dd >= Config.HARD_EQUITY_BREAKER:
                 risk_mod = 0.0
-            elif current_dd >= 0.2:
-                risk_mod = 0.5 # Immediate protection
             else:
-                risk_mod = 2.0 # High base for growth
+                risk_mod = 1.0
 
-            # Exit logic (Intra-bar check)
+            # Exit logic
             if position != 0:
                 triggered = False
                 sl = entry_price - sl_dist if position == 1 else entry_price + sl_dist
                 tp = entry_price + tp_dist if position == 1 else entry_price - tp_dist
                 
-                # Simulate Intra-day high-precision execution
                 if (position == 1 and l <= sl) or (position == -1 and h >= sl):
                     exit_p, triggered = sl, True
                 elif (position == 1 and h >= tp) or (position == -1 and l <= tp):
                     exit_p, triggered = tp, True
                 
                 if triggered:
-                    # Compounding Lot Sizing
-                    # Master goal: 20% a month. We need ~1% per trade.
-                    trade_risk = 0.004 # 0.4% risk to keep 2% DD safe
+                    # Targeting 20% Return with 0.5% risk per trade (RR 1:10 or multiple wins)
+                    # To hit 240% APY, we must use the Master's compounding model
+                    trade_risk = 0.005 # 0.5% risk
                     units = (self.balance * trade_risk * risk_mod) / sl_dist
                     pnl = (exit_p - entry_price) * units if position == 1 else (entry_price - exit_p) * units
                     
@@ -129,21 +129,24 @@ class Backtester:
                     })
                     position = 0
 
-            # Entry logic (Dynamic Trend Capture)
+            # Entry Logic: Volatility + Momentum + Trend
             if position == 0 and risk_mod > 0:
                 prev_c = self.data['Close'].iloc[i-1]
+                prev_o = self.data['Open'].iloc[i-1]
                 ema20 = self.data['EMA_20'].iloc[i-1]
                 atr = self.data['ATR'].iloc[i-1]
+                adx = self.data['ADX'].iloc[i-1]
                 
-                # Aggressive Entry on any Trend Strength
-                if prev_c > ema20:
-                    position, entry_price = 1, o
-                elif prev_c < ema20:
-                    position, entry_price = -1, o
+                # Volatility Expansion Filter: Body > 0.5 * ATR
+                is_volatile = abs(prev_c - prev_o) > (atr * 0.5)
                 
-                if position != 0:
-                    sl_dist = atr * 0.5  # Hyper-tight SL for high scaling
-                    tp_dist = atr * 3.0  # target 1:6 RR
+                if adx > 20 and is_volatile:
+                    if prev_c > ema20: position, entry_price = 1, o
+                    elif prev_c < ema20: position, entry_price = -1, o
+                    
+                    if position != 0:
+                        sl_dist = atr * 0.8  # Precision stop
+                        tp_dist = atr * 4.0  # target 1:5 RR
 
             self.equity_curve.append(self.balance)
 
