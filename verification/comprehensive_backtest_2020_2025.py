@@ -76,7 +76,7 @@ class Backtester:
             return False
 
     def run_simulation(self):
-        """Ultra-Precision 10-Year Compounding Simulation"""
+        """Institutional Precision 10-Year Compounding Simulation"""
         if not self.fetch_data(): return
         
         position = 0
@@ -84,30 +84,34 @@ class Backtester:
         sl_dist = 0
         tp_dist = 0
         hwm = Config.INITIAL_BALANCE
-        monthly_hwm = Config.INITIAL_BALANCE
+        floor = Config.INITIAL_BALANCE * 0.9805  # Hard 1.95% Floor
+        units = 0
+        is_breakeven = False
         
-        print(f"Executing Master's Performance Script: 20% Monthly Goal...")
+        # EMA for responsive trend and absolute baseline
+        self.data['EMA_S'] = self.data['Close'].ewm(span=10).mean()
+        self.data['EMA_L'] = self.data['Close'].ewm(span=30).mean()
+        self.data['EMA_200'] = self.data['Close'].ewm(span=200).mean()
         
-        for i in range(50, len(self.data)):
+        print(f"Executing ShadowBot Pro V4: Legendary Mode (20% Monthly Target)...")
+        
+        for i in range(200, len(self.data)): 
             timestamp = self.data.index[i]
-            # Reset monthly HWM for local DD management
-            if timestamp.day == 1: monthly_hwm = self.balance
-            
             o, h, l, c = self.data['Open'].iloc[i], self.data['High'].iloc[i], self.data['Low'].iloc[i], self.data['Close'].iloc[i]
             
             if self.balance > hwm: hwm = self.balance
             current_dd = (hwm - self.balance) / hwm * 100.0
             
-            # Hard Safety: Global 2% DD Floor
-            if current_dd >= Config.HARD_EQUITY_BREAKER:
-                risk_mod = 0.0
-            else:
-                risk_mod = 1.0
-
-            # Exit logic
+            # Risk Capital Model: Only risk a portion of available buffer
+            risk_buffer = self.balance - floor
+            if risk_buffer <= 0: break # Game over
+            
+            # Management logic
             if position != 0:
                 triggered = False
                 sl = entry_price - sl_dist if position == 1 else entry_price + sl_dist
+                
+                # Dynamic TP: trailing or 1:10
                 tp = entry_price + tp_dist if position == 1 else entry_price - tp_dist
                 
                 if (position == 1 and l <= sl) or (position == -1 and h >= sl):
@@ -116,38 +120,40 @@ class Backtester:
                     exit_p, triggered = tp, True
                 
                 if triggered:
-                    # Targeting 20% Return with 0.5% risk per trade (RR 1:10 or multiple wins)
-                    # To hit 240% APY, we must use the Master's compounding model
-                    trade_risk = 0.005 # 0.5% risk
-                    units = (self.balance * trade_risk * risk_mod) / sl_dist
                     pnl = (exit_p - entry_price) * units if position == 1 else (entry_price - exit_p) * units
-                    
                     self.balance += pnl
                     self.trade_log.append({
                         "Time": timestamp, "Type": "BUY" if position == 1 else "SELL",
                         "PnL": pnl, "Bal": self.balance, "DD": current_dd
                     })
                     position = 0
+                    units = 0
+                    is_breakeven = False
 
-            # Entry Logic: Volatility + Momentum + Trend
-            if position == 0 and risk_mod > 0:
+            # Entry Logic: Risk Capital Scaling
+            if position == 0 and risk_buffer > 0:
                 prev_c = self.data['Close'].iloc[i-1]
-                prev_o = self.data['Open'].iloc[i-1]
-                ema20 = self.data['EMA_20'].iloc[i-1]
+                ema_s = self.data['EMA_S'].iloc[i-1]
+                ema_l = self.data['EMA_L'].iloc[i-1]
+                ema200 = self.data['EMA_200'].iloc[i-1]
                 atr = self.data['ATR'].iloc[i-1]
                 adx = self.data['ADX'].iloc[i-1]
                 
-                # Volatility Expansion Filter: Body > 0.5 * ATR
-                is_volatile = abs(prev_c - prev_o) > (atr * 0.5)
+                # High-Conviction "Golden" Trend
+                long_sig = (ema_s > ema_l) and (prev_c > ema200) and (adx > 20)
+                short_sig = (ema_s < ema_l) and (prev_c < ema200) and (adx > 20)
                 
-                if adx > 20 and is_volatile:
-                    if prev_c > ema20: position, entry_price = 1, o
-                    elif prev_c < ema20: position, entry_price = -1, o
+                if long_sig or short_sig:
+                    position = 1 if long_sig else -1
+                    entry_price = o
+                    sl_dist = atr * 1.5 # Wider stops to avoid whipsaw
+                    tp_dist = atr * 15.0 # targeting 1:10 RR
                     
-                    if position != 0:
-                        sl_dist = atr * 0.8  # Precision stop
-                        tp_dist = atr * 4.0  # target 1:5 RR
-
+                    # Legendary Lot Sizing: Risk 10% of RISK CAPITAL
+                    # This grows exponentially as balance grows away from floor
+                    risk_amount = risk_buffer * 0.1
+                    units = risk_amount / sl_dist
+            
             self.equity_curve.append(self.balance)
 
     def generate_legendary_report(self):
