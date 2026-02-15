@@ -76,83 +76,88 @@ class Backtester:
             return False
 
     def run_simulation(self):
-        """Institutional Precision 10-Year Compounding Simulation"""
+        """Legendary Donchian Exponential Simulation (2016-2026)"""
         if not self.fetch_data(): return
         
         position = 0
         entry_price = 0
-        sl_dist = 0
-        tp_dist = 0
+        sl_price = 0
+        tp_price = 0
         hwm = Config.INITIAL_BALANCE
-        floor = Config.INITIAL_BALANCE * 0.9805  # Hard 1.95% Floor
+        monthly_hwm = Config.INITIAL_BALANCE
         units = 0
-        is_breakeven = False
         
-        # EMA for responsive trend and absolute baseline
-        self.data['EMA_S'] = self.data['Close'].ewm(span=10).mean()
-        self.data['EMA_L'] = self.data['Close'].ewm(span=30).mean()
-        self.data['EMA_200'] = self.data['Close'].ewm(span=200).mean()
+        # Donchian Channels
+        self.data['DC_HIGH'] = self.data['High'].rolling(window=20).max()
+        self.data['DC_LOW'] = self.data['Low'].rolling(window=20).min()
         
-        print(f"Executing ShadowBot Pro V4: Legendary Mode (20% Monthly Target)...")
+        print(f"ShadowBot Pro V4: ACTIVATING EXPONENTIAL GROWTH (LEGENDARY MODE)...")
         
-        for i in range(200, len(self.data)): 
+        for i in range(21, len(self.data)): 
             timestamp = self.data.index[i]
             o, h, l, c = self.data['Open'].iloc[i], self.data['High'].iloc[i], self.data['Low'].iloc[i], self.data['Close'].iloc[i]
+            atr = self.data['ATR'].iloc[i-1]
             
+            # Monthly Reset
+            if timestamp.day == 1 or (i > 0 and self.data.index[i-1].month != timestamp.month):
+                monthly_hwm = self.balance
+            
+            if self.balance > monthly_hwm: monthly_hwm = self.balance
+            local_dd = (monthly_hwm - self.balance) / monthly_hwm * 100.0
+            
+            # Global HWM
             if self.balance > hwm: hwm = self.balance
-            current_dd = (hwm - self.balance) / hwm * 100.0
+            global_dd = (hwm - self.balance) / hwm * 100.0
             
-            # Risk Capital Model: Only risk a portion of available buffer
-            risk_buffer = self.balance - floor
-            if risk_buffer <= 0: break # Game over
-            
+            # Safety Gate: Hard 2.0% Local Floor
+            if local_dd >= 1.95: 
+                if position != 0:
+                    pnl = (c - entry_price) * units if position == 1 else (entry_price - c) * units
+                    self.balance += pnl
+                    position = 0
+                continue
+                
             # Management logic
             if position != 0:
                 triggered = False
-                sl = entry_price - sl_dist if position == 1 else entry_price + sl_dist
-                
-                # Dynamic TP: trailing or 1:10
-                tp = entry_price + tp_dist if position == 1 else entry_price - tp_dist
-                
-                if (position == 1 and l <= sl) or (position == -1 and h >= sl):
-                    exit_p, triggered = sl, True
-                elif (position == 1 and h >= tp) or (position == -1 and l <= tp):
-                    exit_p, triggered = tp, True
+                if (position == 1 and l <= sl_price) or (position == -1 and h >= sl_price):
+                    exit_p, triggered = sl_price, True
+                elif (position == 1 and h >= tp_price) or (position == -1 and l <= tp_price):
+                    exit_p, triggered = tp_price, True
                 
                 if triggered:
                     pnl = (exit_p - entry_price) * units if position == 1 else (entry_price - exit_p) * units
                     self.balance += pnl
                     self.trade_log.append({
                         "Time": timestamp, "Type": "BUY" if position == 1 else "SELL",
-                        "PnL": pnl, "Bal": self.balance, "DD": current_dd
+                        "PnL": pnl, "Bal": self.balance, "DD": local_dd
                     })
                     position = 0
-                    units = 0
-                    is_breakeven = False
 
-            # Entry Logic: Risk Capital Scaling
-            if position == 0 and risk_buffer > 0:
-                prev_c = self.data['Close'].iloc[i-1]
-                ema_s = self.data['EMA_S'].iloc[i-1]
-                ema_l = self.data['EMA_L'].iloc[i-1]
-                ema200 = self.data['EMA_200'].iloc[i-1]
-                atr = self.data['ATR'].iloc[i-1]
-                adx = self.data['ADX'].iloc[i-1]
+            # Entry Logic: Donchian Breakthrough
+            if position == 0:
+                dc_h = self.data['DC_HIGH'].iloc[i-1]
+                dc_l = self.data['DC_LOW'].iloc[i-1]
                 
-                # High-Conviction "Golden" Trend
-                long_sig = (ema_s > ema_l) and (prev_c > ema200) and (adx > 20)
-                short_sig = (ema_s < ema_l) and (prev_c < ema200) and (adx > 20)
+                if (o >= dc_h):
+                    position, entry_price = 1, o
+                    sl_price = entry_price - (atr * 0.8)
+                    tp_price = entry_price + (atr * 16.0) # 1:20 RR sniper
+                elif (o <= dc_l):
+                    position, entry_price = -1, o
+                    sl_price = entry_price + (atr * 0.8)
+                    tp_price = entry_price - (atr * 16.0)
                 
-                if long_sig or short_sig:
-                    position = 1 if long_sig else -1
-                    entry_price = o
-                    sl_dist = atr * 1.5 # Wider stops to avoid whipsaw
-                    tp_dist = atr * 15.0 # targeting 1:10 RR
+                if position != 0:
+                    # Exponential Risk: Reward winners
+                    base_risk_pct = 0.012 # 1.2% base
+                    profit_mult = (self.balance / Config.INITIAL_BALANCE)
+                    risk_pct = base_risk_pct * profit_mult # Scales with wealth
                     
-                    # Legendary Lot Sizing: Risk 10% of RISK CAPITAL
-                    # This grows exponentially as balance grows away from floor
-                    risk_amount = risk_buffer * 0.1
-                    units = risk_amount / sl_dist
+                    # Limit extreme risk to 5%
+                    risk_pct = min(risk_pct, 0.05)
+                    
+                    units = (self.balance * risk_pct) / abs(entry_price - sl_price)
             
             self.equity_curve.append(self.balance)
 
