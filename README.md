@@ -39,7 +39,7 @@ Utilizes the high-velocity EMA triple-filter (5/13/50) with RSI Sniper entries, 
   - `RiskManagerV2.mqh`: The core commander for DD and consistency.
   - `TradeManagerV2.mqh`: Mandatory SL and multi-fill manager.
   - `NewsFilter.mqh`: High-impact event block.
-- 📄 `ShadowTitanV2.mq5`: The main Expert Advisor file.
+- 📄 `Shadow_Titan_V2.mq5`: The main Expert Advisor file.
 - 📄 `SHADOW_TITAN_V2_AUDIT_REPORT.md`: Full 30-year 360-month performance record.
 - 📄 `MT5_DEPLOYMENT_GUIDE.md`: Step-by-step setup for funding platforms.
 
