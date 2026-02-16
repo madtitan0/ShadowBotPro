@@ -35,6 +35,8 @@ Utilizes the high-velocity EMA triple-filter (5/13/50) with RSI Sniper entries, 
 ---
 
 ## 📂 Project Structure
+- 📁 `version_history/`: Full historical record of the strategy evolution (V1 - V4).
+- 📜 `PROJECT_HISTORY.md`: The story of Shadow Titan's alpha generation milestones.
 - 📁 `Include/PropBot/`: 
   - `RiskManagerV2.mqh`: The core commander for DD and consistency.
   - `TradeManagerV2.mqh`: Mandatory SL and multi-fill manager.
@@ -42,6 +44,11 @@ Utilizes the high-velocity EMA triple-filter (5/13/50) with RSI Sniper entries, 
 - 📄 `Shadow_Titan_V2.mq5`: The main Expert Advisor file.
 - 📄 `SHADOW_TITAN_V2_AUDIT_REPORT.md`: Full 30-year 360-month performance record.
 - 📄 `MT5_DEPLOYMENT_GUIDE.md`: Step-by-step setup for funding platforms.
+
+---
+
+## 📜 Project Evolution
+Curious how we got here? Read the [Full Project History](PROJECT_HISTORY.md) to see the performance metrics of every version from V1 to V2.
 
 ---
 
