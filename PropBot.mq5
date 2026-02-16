@@ -22,7 +22,7 @@ input double fpMaxDailyLossPercent = 5.0;      // Official Daily Loss Limit (%)
 input double fpMaxTotalLossPercent = 10.0;     // Official Total Loss Limit (%)
 
 input group " --- Risk Settings --- "
-input double RiskPerTradePercent = 0.75;       // Risk per trade % (Optimal for V3.1)
+input double RiskPerTradePercent = 1.0;        // Risk per trade % (Sovereign Benchmark)
 input double MaxDailyLossPercent = 4.0;        // Max Daily Loss % (Hard Stop)
 input double MinDailyProfit = 1.0;             // Target Level 1 (Reduce Risk)
 input double TargetDailyProfit = 3.0;          // Target Level 2 (Stop/Min Risk)
@@ -42,8 +42,8 @@ input bool   EnablePullbacks = true;           // Enable MA Trend Pullbacks
 input int    BollingerPeriod = 20;             // BB Period
 input double BollingerDev = 2.5;               // BB Deviation (Aggressive Reversal)
 input int    RsiPeriod = 14;                   // RSI Period
-input int    MaFastPeriod = 9;                 // Fast EMA (Trend)
-input int    MaSlowPeriod = 21;                // Slow EMA (Trend)
+input int    MaFastPeriod = 5;                  // Fast EMA (Sovereign 5)
+input int    MaSlowPeriod = 13;                 // Medium EMA (Sovereign 13)
 
 input group " --- V3 Ultra-Precision Settings --- "
 input bool   UseHtfFilter = true;              // Trade only with H1 Trend?
